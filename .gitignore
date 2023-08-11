@@ -1,0 +1,5 @@
+local_build/
+compile_commands.json
+*Presets.json
+.python-version
+.cache/

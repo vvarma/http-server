@@ -1,0 +1,7 @@
+[requires]
+asio/1.28.1
+spdlog/1.11.0
+
+[generators]
+CMakeDeps
+CMakeToolchain
