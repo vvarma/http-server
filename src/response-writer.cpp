@@ -1,12 +1,15 @@
+// Copyright 2023 Vinay Varma; Subject to the MIT License.
 #include "http-server/response-writer.h"
-#include <asio/ip/tcp.hpp>
+
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
+
+#include <asio/ip/tcp.hpp>
 using asio::awaitable;
 using asio::ip::tcp;
 
 #if defined(ASIO_ENABLE_HANDLER_TRACKING)
-#define use_awaitable                                                          \
+#define use_awaitable \
   asio::use_awaitable_t(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 #else
 using asio::use_awaitable;
@@ -36,4 +39,4 @@ awaitable<void> ResponseWriter::WriteHeaders(size_t contentLength) {
   std::string resp = ss.str();
   co_await socket_->async_write_some(asio::buffer(resp), use_awaitable);
 }
-} // namespace hs
+}  // namespace hs

@@ -1,10 +1,8 @@
+// Copyright 2023 Vinay Varma; Subject to the MIT License.
 #include "http-server/http-server.h"
 
-#include <cstddef>
-#include <memory>
-#include <optional>
-#include <sstream>
-#include <unordered_map>
+#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include <asio.hpp>
 #include <asio/awaitable.hpp>
@@ -12,8 +10,11 @@
 #include <asio/ip/tcp.hpp>
 #include <asio/read_until.hpp>
 #include <asio/use_awaitable.hpp>
-#include <fmt/format.h>
-#include <spdlog/spdlog.h>
+#include <cstddef>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <unordered_map>
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -21,7 +22,7 @@ using asio::detached;
 using asio::ip::tcp;
 
 #if defined(ASIO_ENABLE_HANDLER_TRACKING)
-#define use_awaitable                                                          \
+#define use_awaitable \
   asio::use_awaitable_t(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 #else
 using asio::use_awaitable;
@@ -39,9 +40,9 @@ struct RequestImpl {
   std::shared_ptr<tcp::socket> socket;
 };
 class Router {
-public:
+ public:
   void AddRoute(Route route) { routes_.push_back(route); }
-  std::optional<Route::Handler> Match(RequestImpl::Ptr &request) {
+  std::optional<Route::Handler> Match(const RequestImpl::Ptr &request) {
     for (auto route : routes_) {
       if (route.method == request->method && route.path == request->path) {
         return route.handler;
@@ -50,7 +51,7 @@ public:
     return std::nullopt;
   }
 
-private:
+ private:
   std::vector<Route> routes_;
 };
 
@@ -73,7 +74,6 @@ auto ParseUrl(const std::string &url) {
   }
   std::string path = url.substr(0, npos);
   while (size_t qpos = url.find('&', npos + 1)) {
-
     auto query = url.substr(npos + 1, qpos - npos - 1);
     size_t spos = query.find('=');
     if (spos == std::string::npos) {
@@ -88,8 +88,8 @@ auto ParseUrl(const std::string &url) {
   return std::make_pair(path, params);
 }
 
-awaitable<RequestImpl::Ptr>
-ParseRequestLine(std::shared_ptr<tcp::socket> socket) {
+awaitable<RequestImpl::Ptr> ParseRequestLine(
+    std::shared_ptr<tcp::socket> socket) {
   asio::streambuf buffer;
   co_await async_read_until(*socket, buffer, "\r\n", use_awaitable);
   std::istream input(&buffer);
@@ -130,12 +130,12 @@ ParseRequestLine(std::shared_ptr<tcp::socket> socket) {
   std::string headerLine;
   while (std::getline(input, headerLine) && !headerLine.empty()) {
     headerLine = cleanString(
-        headerLine); // Clean the line from trailing '\r' and whitespace
+        headerLine);  // Clean the line from trailing '\r' and whitespace
     size_t colonPos = headerLine.find(':');
     if (colonPos != std::string::npos) {
       std::string headerName = headerLine.substr(0, colonPos);
       std::string headerValue =
-          headerLine.substr(colonPos + 1); // Skip ':' after colon
+          headerLine.substr(colonPos + 1);  // Skip ':' after colon
       req->headers[headerName] = cleanString(headerValue);
     }
   }
@@ -143,7 +143,7 @@ ParseRequestLine(std::shared_ptr<tcp::socket> socket) {
 }
 
 class HttpServerImpl {
-public:
+ public:
   awaitable<void> HandleRequest(RequestImpl::Ptr request) {
     auto handler = router_.Match(request);
 
@@ -188,10 +188,10 @@ public:
   }
   void AddRoute(Route route) { router_.AddRoute(route); }
 
-private:
+ private:
   Router router_;
 };
-} // namespace internal
+}  // namespace internal
 
 Route::Route(Method method, const std::string &path, Handler handler)
     : method(method), path(path), handler(handler) {}
@@ -203,12 +203,12 @@ void HttpServer::Serve() {
   co_spawn(io_context, pimpl_->Serve(), asio::detached);
   io_context.run();
 }
-HttpServer::~HttpServer(){};
+HttpServer::~HttpServer() {}
 void HttpServer::AddRoute(const Route &route) { pimpl_->AddRoute(route); }
 
 Request::Request(std::shared_ptr<internal::RequestImpl> pimpl)
     : pimpl_(std::move(pimpl)) {}
-Request::~Request(){};
+Request::~Request() {}
 Method Request::GetMethod() const { return pimpl_->method; }
 Version Request::GetVersion() const { return pimpl_->version; }
 std::string_view Request::Path() const { return pimpl_->path; }
@@ -232,4 +232,4 @@ Exception::Exception(StatusCode statusCode, std::string message)
 
 const char *Exception::what() const noexcept { return message_.c_str(); }
 
-} // namespace hs
+}  // namespace hs
