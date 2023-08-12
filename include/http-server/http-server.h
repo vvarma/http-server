@@ -54,11 +54,14 @@ struct Route {
   Route(Method method, const std::string &path, Handler handler);
 };
 
-class HttpServer {
+class HttpServer : public std::enable_shared_from_this<HttpServer> {
  public:
+  typedef std::shared_ptr<HttpServer> Ptr;
+
   HttpServer();
   void AddRoute(const Route &route);
   void Serve();
+  asio::awaitable<void> ServeAsync();
   ~HttpServer();
 
  private:
