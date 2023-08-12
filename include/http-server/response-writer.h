@@ -1,14 +1,14 @@
 #ifndef HTTP_SERVER_RESPONSE_WRITER_H
 #define HTTP_SERVER_RESPONSE_WRITER_H
-#include <concepts>
-#include <memory>
+#include <fmt/core.h>
 
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
 #include <asio/detached.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/use_awaitable.hpp>
-#include <fmt/core.h>
+#include <concepts>
+#include <memory>
 
 namespace hs {
 enum Version { HTTP_1_0, HTTP_1_1 };
@@ -25,21 +25,23 @@ concept Writable = requires(T t) {
 };
 
 class ResponseWriter : public std::enable_shared_from_this<ResponseWriter> {
-public:
+ public:
   typedef std::shared_ptr<ResponseWriter> Ptr;
 
   ResponseWriter(Version version,
                  std::shared_ptr<asio::ip::tcp::socket> socket);
   void SetStatusCode(StatusCode code);
   void SetHeader(std::string_view key, std::string_view value);
-  template <Writable T> void Write(T data) {
+  template <Writable T>
+  void Write(T data) {
     auto executor = socket_->get_executor();
     co_spawn(executor, WriteAsync(data), asio::detached);
   }
   asio::awaitable<void> WriteHeaders(size_t contentLength);
 
-private:
-  template <Writable T> asio::awaitable<void> WriteAsync(T data) {
+ private:
+  template <Writable T>
+  asio::awaitable<void> WriteAsync(T data) {
     if (!headersSent) {
       co_await shared_from_this()->WriteHeaders(data.size());
     }
@@ -53,15 +55,15 @@ private:
   bool headersSent = false;
 };
 
-} // namespace hs
+}  // namespace hs
 namespace fmt {
-template <> struct formatter<hs::StatusCode> {
+template <>
+struct formatter<hs::StatusCode> {
   char presentation = 's';
   constexpr auto parse(format_parse_context &ctx)
       -> format_parse_context::iterator {
     auto it = ctx.begin(), end = ctx.end();
-    if (it != end && (*it == 's' || *it == 'd'))
-      presentation = *it++;
+    if (it != end && (*it == 's' || *it == 'd')) presentation = *it++;
 
     // Check if reached the end of the range:
     // if (it != end && *it != '}')
@@ -74,37 +76,37 @@ template <> struct formatter<hs::StatusCode> {
   template <typename FormatContext>
   auto format(const hs::StatusCode &code, FormatContext &ctx)
       -> decltype(ctx.out()) {
-    if (presentation == 'd')
-      return fmt::format_to(ctx.out(), "{}", (int)code);
+    if (presentation == 'd') return fmt::format_to(ctx.out(), "{}", (int)code);
     switch (code) {
-
-    case hs::Ok:
-      return fmt::format_to(ctx.out(), "Ok");
-    case hs::BadRequest:
-      return fmt::format_to(ctx.out(), "BadRequest");
-    case hs::NotFound:
-      return fmt::format_to(ctx.out(), "NotFound");
-    case hs::InternalServerError:
-    default:
-      return fmt::format_to(ctx.out(), "InternalServerError");
+      case hs::Ok:
+        return fmt::format_to(ctx.out(), "Ok");
+      case hs::BadRequest:
+        return fmt::format_to(ctx.out(), "BadRequest");
+      case hs::NotFound:
+        return fmt::format_to(ctx.out(), "NotFound");
+      case hs::InternalServerError:
+      default:
+        return fmt::format_to(ctx.out(), "InternalServerError");
     }
   }
 };
-template <> struct formatter<hs::Version> {
-  template <typename ParseContext> constexpr auto parse(ParseContext &ctx) {
+template <>
+struct formatter<hs::Version> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext &ctx) {
     return ctx.begin();
   };
 
   template <typename FormatContext>
   auto format(const hs::Version &v, FormatContext &ctx) -> decltype(ctx.out()) {
     switch (v) {
-    case hs::HTTP_1_0:
-      return fmt::format_to(ctx.out(), "HTTP/1.0");
-    case hs::HTTP_1_1:
-    default:
-      return fmt::format_to(ctx.out(), "HTTP/1.1");
+      case hs::HTTP_1_0:
+        return fmt::format_to(ctx.out(), "HTTP/1.0");
+      case hs::HTTP_1_1:
+      default:
+        return fmt::format_to(ctx.out(), "HTTP/1.1");
     }
   }
 };
-} // namespace fmt
-#endif // !#ifndef HTTP_SERVER_RESPONSE_WRITER_H
+}  // namespace fmt
+#endif  // !#ifndef HTTP_SERVER_RESPONSE_WRITER_H

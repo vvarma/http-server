@@ -1,5 +1,8 @@
+// Copyright 2023 Vinay Varma; Subject to the MIT License.
 #ifndef HTTP_SERVER_H
 #define HTTP_SERVER_H
+
+#include <fmt/core.h>
 
 #include <functional>
 #include <memory>
@@ -8,8 +11,6 @@
 #include <string_view>
 #include <unordered_map>
 
-#include <fmt/core.h>
-
 #include "http-server/response-writer.h"
 
 namespace hs {
@@ -17,7 +18,7 @@ namespace hs {
 namespace internal {
 class HttpServerImpl;
 struct RequestImpl;
-} // namespace internal
+}  // namespace internal
 enum class Method {
   GET,
   POST,
@@ -31,8 +32,7 @@ enum class Method {
 };
 
 class Request {
-
-public:
+ public:
   Request(std::shared_ptr<internal::RequestImpl> pimpl);
   ~Request();
 
@@ -42,7 +42,7 @@ public:
   std::optional<std::string_view> Header(std::string_view key) const;
   std::optional<std::string_view> Param(std::string_view key) const;
 
-private:
+ private:
   std::shared_ptr<internal::RequestImpl> pimpl_;
 };
 
@@ -55,13 +55,13 @@ struct Route {
 };
 
 class HttpServer {
-public:
+ public:
   HttpServer();
   void AddRoute(const Route &route);
   void Serve();
   ~HttpServer();
 
-private:
+ private:
   std::unique_ptr<internal::HttpServerImpl> pimpl_;
 };
 
@@ -69,12 +69,11 @@ class Exception : public std::exception {
   StatusCode code_;
   std::string message_;
 
-public:
+ public:
   Exception(StatusCode code, std::string message);
   const char *what() const noexcept override;
 };
 
-} // namespace hs
+}  // namespace hs
 
-
-#endif // !#ifndef HTTP_SERVER_H
+#endif  // !#ifndef HTTP_SERVER_H
