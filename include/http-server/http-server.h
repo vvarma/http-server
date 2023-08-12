@@ -4,6 +4,7 @@
 
 #include <fmt/core.h>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -51,14 +52,23 @@ struct Route {
   Method method;
   std::string path;
   Handler handler;
+  // Ask client to close connection when done
+  bool keep_socket_open = true;
   Route(Method method, const std::string &path, Handler handler);
+};
+
+struct Config {
+  std::string program_name;
+  std::string bind_address;
+  uint16_t port;
+  Config(std::string program_name, std::string bind_address, uint16_t port);
 };
 
 class HttpServer : public std::enable_shared_from_this<HttpServer> {
  public:
   typedef std::shared_ptr<HttpServer> Ptr;
 
-  HttpServer();
+  HttpServer(const Config &config);
   void AddRoute(const Route &route);
   void Serve();
   asio::awaitable<void> ServeAsync();
