@@ -17,9 +17,10 @@ int main(int argc, char *argv[]) {
   server->AddRoute(hs::Route(
       hs::Method::GET, "/",
       [](hs::Request req, hs::ResponseWriter::Ptr res) -> void {
-        res->SetHeader("Content-Type", "text/plain");
+        res->SetContentType("text/plain");
         auto resp =
             fmt::format("Hello, {}!", req.Param("name").value_or("world"));
+        res->SetContentLength(resp.size());
         res->Write(resp);
       }));
   co_spawn(io_context, server->ServeAsync(), asio::detached);

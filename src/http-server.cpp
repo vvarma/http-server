@@ -160,7 +160,8 @@ class HttpServerImpl {
     } else {
       writer->SetStatusCode(StatusCode::NotFound);
     }
-    co_await writer->WriteHeaders(0);
+    writer->SetContentLength(0);
+    co_await writer->WriteHeaders();
     co_return;
   }
   awaitable<void> HandleConnection(std::shared_ptr<tcp::socket> socket) {
