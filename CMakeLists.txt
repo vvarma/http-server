@@ -10,7 +10,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DASIO_ENABLE_HANDLER_TRACKI
 
 add_library(${PROJECT_NAME} STATIC src/http-server.cpp src/response-writer.cpp)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(${PROJECT_NAME} PRIVATE asio::asio spdlog::spdlog)
+target_link_libraries(${PROJECT_NAME} PUBLIC fmt::fmt asio::asio PRIVATE spdlog::spdlog)
 
 add_subdirectory(test)
 
