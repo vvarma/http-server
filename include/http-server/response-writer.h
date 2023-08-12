@@ -52,7 +52,7 @@ class ResponseWriter : public std::enable_shared_from_this<ResponseWriter> {
   std::shared_ptr<asio::ip::tcp::socket> socket_;
   StatusCode statusCode = StatusCode::Ok;
   std::unordered_map<std::string, std::string> headers;
-  bool headersSent = false;
+  std::atomic<bool> headersSent = false;
 };
 
 }  // namespace hs

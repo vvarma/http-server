@@ -27,6 +27,7 @@ void ResponseWriter::SetHeader(std::string_view name, std::string_view value) {
 }
 
 awaitable<void> ResponseWriter::WriteHeaders(size_t contentLength) {
+  if (!headersSent) headersSent = true;
   std::stringstream ss;
   ss << fmt::format("{} {:d} {:s}\n", version_, statusCode, statusCode);
   for (auto &header : headers) {
