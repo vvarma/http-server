@@ -19,6 +19,7 @@ clean:
 .PHONY: conan
 conan:
 	conan install . -if=$(BUILD_DIR) -of=$(BUILD_DIR) --build=missing --profile:build=$(BUILD_PROFILE) --profile:host=$(HOST_PROFILE)
+
 .PHONY: build
 build: conan
 	cmake -S . -B $(BUILD_DIR) -G Ninja $(CMAKE_FLAGS) 

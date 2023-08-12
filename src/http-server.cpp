@@ -180,6 +180,7 @@ class HttpServerImpl {
   awaitable<void> Serve() {
     auto executor = co_await asio::this_coro::executor;
     tcp::acceptor acceptor(executor, {tcp::v4(), 55555});
+    spdlog::info("starting server at 55555");
     for (;;) {
       auto socket = std::make_shared<tcp::socket>(executor);
       co_await acceptor.async_accept(*socket, use_awaitable);
@@ -198,12 +199,19 @@ Route::Route(Method method, const std::string &path, Handler handler)
 
 HttpServer::HttpServer()
     : pimpl_(std::make_unique<internal::HttpServerImpl>()) {}
+
 void HttpServer::Serve() {
   asio::io_context io_context;
   co_spawn(io_context, pimpl_->Serve(), asio::detached);
   io_context.run();
 }
+
+awaitable<void> HttpServer::ServeAsync() {
+  co_await shared_from_this()->pimpl_->Serve();
+}
+
 HttpServer::~HttpServer() {}
+
 void HttpServer::AddRoute(const Route &route) { pimpl_->AddRoute(route); }
 
 Request::Request(std::shared_ptr<internal::RequestImpl> pimpl)
