@@ -32,18 +32,21 @@ class ResponseWriter : public std::enable_shared_from_this<ResponseWriter> {
                  std::shared_ptr<asio::ip::tcp::socket> socket);
   void SetStatusCode(StatusCode code);
   void SetHeader(std::string_view key, std::string_view value);
+  void SetContentType(std::string_view contentType);
+  void SetContentLength(size_t contentLength);
+  bool IsOpen() const;
   template <Writable T>
   void Write(T data) {
     auto executor = socket_->get_executor();
     co_spawn(executor, WriteAsync(data), asio::detached);
   }
-  asio::awaitable<void> WriteHeaders(size_t contentLength);
+  asio::awaitable<void> WriteHeaders();
 
  private:
   template <Writable T>
   asio::awaitable<void> WriteAsync(T data) {
     if (!headersSent) {
-      co_await shared_from_this()->WriteHeaders(data.size());
+      co_await shared_from_this()->WriteHeaders();
     }
     co_await socket_->async_write_some(asio::buffer(data.data(), data.size()),
                                        asio::use_awaitable);

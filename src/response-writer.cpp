@@ -25,19 +25,25 @@ void ResponseWriter::SetStatusCode(StatusCode code) { statusCode = code; }
 void ResponseWriter::SetHeader(std::string_view name, std::string_view value) {
   headers[std::string(name)] = std::string(value);
 }
+void ResponseWriter::SetContentType(std::string_view contentType) {
+  SetHeader("Content-Type", contentType);
+}
+void ResponseWriter::SetContentLength(size_t contentLength) {
+  SetHeader("Content-Length", std::to_string(contentLength));
+}
+bool ResponseWriter::IsOpen() const { return socket_->is_open(); }
 
-awaitable<void> ResponseWriter::WriteHeaders(size_t contentLength) {
+awaitable<void> ResponseWriter::WriteHeaders() {
   if (!headersSent) headersSent = true;
   std::stringstream ss;
-  ss << fmt::format("{} {:d} {:s}\n", version_, statusCode, statusCode);
+  ss << fmt::format("{} {:d} {:s}\r\n", version_, statusCode, statusCode);
   for (auto &header : headers) {
-    auto headerLine = fmt::format("{}: {}\n", header.first, header.second);
-    spdlog::info("Sending header: {}", headerLine);
+    auto headerLine = fmt::format("{}: {}\r\n", header.first, header.second);
     ss << headerLine;
   }
-  ss << fmt::format("Content-Length: {:d}\n", contentLength);
   ss << "\r\n";
   std::string resp = ss.str();
+  spdlog::debug("Response: {}", resp);
   co_await socket_->async_write_some(asio::buffer(resp), use_awaitable);
 }
 }  // namespace hs
