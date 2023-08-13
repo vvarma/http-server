@@ -1,16 +1,20 @@
-#ifndef HTTP_SERVER_RESPONSE_WRITER_H
-#define HTTP_SERVER_RESPONSE_WRITER_H
+#ifndef HTTP_SERVER_ENUM_H
+#define HTTP_SERVER_ENUM_H
 #include <fmt/core.h>
-
-#include <asio/awaitable.hpp>
-#include <asio/co_spawn.hpp>
-#include <asio/detached.hpp>
-#include <asio/ip/tcp.hpp>
-#include <asio/use_awaitable.hpp>
-#include <concepts>
-#include <memory>
-
+#include <fmt/format.h>
 namespace hs {
+
+enum class Method {
+  GET,
+  POST,
+  PUT,
+  DELETE,
+  HEAD,
+  //  OPTIONS,
+  //  PATCH,
+  //  TRACE,
+  //  CONNECT
+};
 enum Version { HTTP_1_0, HTTP_1_1 };
 enum StatusCode {
   Ok = 200,
@@ -18,47 +22,8 @@ enum StatusCode {
   NotFound = 404,
   InternalServerError = 500
 };
-template <typename T>
-concept Writable = requires(T t) {
-  { t.data() } -> std::convertible_to<const void *>;
-  { t.size() } -> std::convertible_to<std::size_t>;
-};
-
-class ResponseWriter : public std::enable_shared_from_this<ResponseWriter> {
- public:
-  typedef std::shared_ptr<ResponseWriter> Ptr;
-
-  ResponseWriter(Version version,
-                 std::shared_ptr<asio::ip::tcp::socket> socket);
-  void SetStatusCode(StatusCode code);
-  void SetHeader(std::string_view key, std::string_view value);
-  void SetContentType(std::string_view contentType);
-  void SetContentLength(size_t contentLength);
-  bool IsOpen() const;
-  template <Writable T>
-  void Write(T data) {
-    auto executor = socket_->get_executor();
-    co_spawn(executor, WriteAsync(data), asio::detached);
-  }
-  asio::awaitable<void> WriteHeaders();
-
- private:
-  template <Writable T>
-  asio::awaitable<void> WriteAsync(T data) {
-    if (!headersSent) {
-      co_await shared_from_this()->WriteHeaders();
-    }
-    co_await socket_->async_write_some(asio::buffer(data.data(), data.size()),
-                                       asio::use_awaitable);
-  }
-  Version version_;
-  std::shared_ptr<asio::ip::tcp::socket> socket_;
-  StatusCode statusCode = StatusCode::Ok;
-  std::unordered_map<std::string, std::string> headers;
-  std::atomic<bool> headersSent = false;
-};
-
 }  // namespace hs
+
 namespace fmt {
 template <>
 struct formatter<hs::StatusCode> {
@@ -112,4 +77,4 @@ struct formatter<hs::Version> {
   }
 };
 }  // namespace fmt
-#endif  // !#ifndef HTTP_SERVER_RESPONSE_WRITER_H
+#endif  // !#ifndef HTTP_SERVER_ENUM_H

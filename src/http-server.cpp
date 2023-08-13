@@ -6,16 +6,22 @@
 
 #include <asio.hpp>
 #include <asio/awaitable.hpp>
+#include <asio/co_spawn.hpp>
 #include <asio/detached.hpp>
+#include <asio/error.hpp>
 #include <asio/ip/address_v4.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read_until.hpp>
 #include <asio/use_awaitable.hpp>
 #include <cstddef>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <unordered_map>
+
+#include "http-server/enum.h"
+#include "http-server/route.h"
 
 using asio::awaitable;
 using asio::co_spawn;
@@ -46,19 +52,19 @@ struct RequestImpl {
 };
 class Router {
  public:
-  void AddRoute(Route route) { routes_.push_back(route); }
-  std::optional<std::pair<Route::Handler, bool>> Match(
-      const RequestImpl::Ptr &request) {
+  void AddRoute(const Route::Ptr &route) { routes_.push_back(route); }
+  std::optional<Route::Ptr> Match(const RequestImpl::Ptr &request) {
     for (auto route : routes_) {
-      if (route.method == request->method && route.path == request->path) {
-        return std::make_pair(route.handler, route.keep_socket_open);
+      if (route->GetMethod() == request->method &&
+          route->GetPath() == request->path) {
+        return route;
       }
     }
     return std::nullopt;
   }
 
  private:
-  std::vector<Route> routes_;
+  std::vector<Route::Ptr> routes_;
 };
 
 // Helper function to remove trailing '\r' and leading/trailing whitespace from
@@ -147,34 +153,85 @@ awaitable<RequestImpl::Ptr> ParseRequestLine(
   }
   co_return req;
 }
+class Session : public std::enable_shared_from_this<Session> {
+ public:
+  Session(Handler::Ptr handler, RequestImpl::Ptr request)
+      : handler_(handler), request_(request) {}
+
+  awaitable<void> operator()(StatusCode statusCode) {
+    asio::error_code ec;
+    size_t n = co_await request_->socket->async_write_some(
+        asio::buffer(fmt::format("{} {:d} {:s}\r\n", request_->version,
+                                 statusCode, statusCode)),
+        asio::redirect_error(use_awaitable, ec));
+    spdlog::trace("Wrote statusCode{}; {} bytes to socket; ec:{}", statusCode,
+                  n, ec.message());
+    if (ec == asio::error::broken_pipe) {
+      spdlog::trace("Got a broken pipe on write statuscode");
+      handler_->SetDone();
+    }
+  }
+  awaitable<void> operator()(Headers headers) {
+    std::stringstream ss;
+    for (auto &header : headers) {
+      auto headerLine = fmt::format("{}: {}\r\n", header.first, header.second);
+      ss << headerLine;
+    }
+    ss << "\r\n";
+    std::string resp = ss.str();
+    asio::error_code ec;
+    size_t n = co_await request_->socket->async_write_some(
+        asio::buffer(resp), asio::redirect_error(use_awaitable, ec));
+    spdlog::trace("Wrote headers; {} bytes to socket; ec:{}", n, ec.message());
+    if (ec == asio::error::broken_pipe) {
+      spdlog::trace("Got a broken pipe on write header");
+      handler_->SetDone();
+    }
+  }
+  awaitable<void> operator()(ResponseBody::Ptr resp) {
+    asio::error_code ec;
+    size_t n = co_await request_->socket->async_write_some(
+        asio::buffer(resp->GetData(), resp->GetSize()),
+        asio::redirect_error(use_awaitable, ec));
+    spdlog::trace("Wrote {} bytes to socket; ec:{}", n, ec.message());
+    if (ec == asio::error::broken_pipe) {
+      spdlog::trace("Got a broken pipe on write body");
+      handler_->SetDone();
+    }
+  }
+
+  awaitable<void> ProcessRequest() {
+    auto gen = handler_->Handle(Request(request_));
+    while (gen) {
+      auto resp = gen();
+      co_await std::visit(*this, resp);
+    }
+    spdlog::info("Finished processing request");
+  }
+
+ private:
+  Handler::Ptr handler_;
+  RequestImpl::Ptr request_;
+};
+
+awaitable<void> WriteOnFail(RequestImpl::Ptr req, StatusCode statusCode) {
+  std::string response = fmt::format("{} {:d} {:s}\r\nContent-Length:0\r\n\r\n",
+                                     req->version, statusCode, statusCode);
+  co_await req->socket->async_write_some(asio::buffer(response), use_awaitable);
+}
 
 class HttpServerImpl {
  public:
   HttpServerImpl(const Config &config) : config_(config) {}
-  awaitable<bool> HandleRequest(RequestImpl::Ptr request) {
-    auto handler = router_.Match(request);
+  awaitable<void> HandleRequest(RequestImpl::Ptr request) {
+    auto route = router_.Match(request);
 
-    auto writer =
-        std::make_shared<ResponseWriter>(request->version, request->socket);
-    writer->SetHeader(kHeaderServer, config_.program_name);
-    if (handler) {
-      try {
-        auto [handler_fn, keep_socket_open] = handler.value();
-        if (!keep_socket_open) {
-          writer->SetHeader(kHeaderConnection, kHeaderValueClose);
-        }
-        handler_fn(Request(request), writer);
-        co_return keep_socket_open;
-      } catch (std::exception &e) {
-        spdlog::error("Exception: {}", e.what());
-        writer->SetStatusCode(StatusCode::InternalServerError);
-      }
+    if (route) {
+      co_await std::make_shared<Session>(route.value()->GetHandler(), request)
+          ->ProcessRequest();
     } else {
-      writer->SetStatusCode(StatusCode::NotFound);
+      co_await WriteOnFail(request, StatusCode::NotFound);
     }
-    writer->SetContentLength(0);
-    co_await writer->WriteHeaders();
-    co_return true;
   }
   awaitable<void> HandleConnection(std::shared_ptr<tcp::socket> socket) {
     for (;;) {
@@ -184,17 +241,18 @@ class HttpServerImpl {
       //   co_await socket->async_write_some(asio::buffer(line), use_awaitable);
       // }
       auto version = req->version;
-      bool keep_socket_open = co_await HandleRequest(std::move(req));
-      if (version == Version::HTTP_1_0 || !keep_socket_open) {
+      co_await HandleRequest(std::move(req));
+      if (version == Version::HTTP_1_0) {
         break;
       }
+      // todo figure when to break
     }
   }
   awaitable<void> Serve() {
     auto executor = co_await asio::this_coro::executor;
-    tcp::acceptor acceptor(
-        executor,
-        {asio::ip::make_address_v4(config_.bind_address), config_.port});
+    auto address = asio::ip::make_address_v4("0.0.0.0");
+    spdlog::info("binding to {}:{}", config_.bind_address, config_.port);
+    tcp::acceptor acceptor(executor, {address, config_.port});
     spdlog::info("starting server at {}:{}", config_.bind_address,
                  config_.port);
     for (;;) {
@@ -203,7 +261,7 @@ class HttpServerImpl {
       co_spawn(executor, HandleConnection(std::move(socket)), detached);
     }
   }
-  void AddRoute(Route route) { router_.AddRoute(route); }
+  void AddRoute(const Route::Ptr &route) { router_.AddRoute(route); }
 
  private:
   Router router_;
@@ -211,8 +269,9 @@ class HttpServerImpl {
 };
 }  // namespace internal
 
-Route::Route(Method method, const std::string &path, Handler handler)
-    : method(method), path(path), handler(handler) {}
+Config::Config(const std::string &program_name, const std::string &bind_address,
+               uint16_t port)
+    : program_name(program_name), bind_address(bind_address), port(port) {}
 
 HttpServer::HttpServer(const Config &config)
     : pimpl_(std::make_unique<internal::HttpServerImpl>(config)) {}
@@ -229,7 +288,7 @@ awaitable<void> HttpServer::ServeAsync() {
 
 HttpServer::~HttpServer() {}
 
-void HttpServer::AddRoute(const Route &route) { pimpl_->AddRoute(route); }
+void HttpServer::AddRoute(const Route::Ptr &route) { pimpl_->AddRoute(route); }
 
 Request::Request(std::shared_ptr<internal::RequestImpl> pimpl)
     : pimpl_(std::move(pimpl)) {}
