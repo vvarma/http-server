@@ -2,17 +2,18 @@
 #include <spdlog/common.h>
 #include <spdlog/spdlog.h>
 
-#include <asio.hpp>
 #include <chrono>
+#include <coro/async_generator.hpp>
 #include <memory>
 #include <thread>
 
+#include "coro/sync_wait.hpp"
 #include "http-server/http-server.h"
 #include "http-server/route.h"
 using namespace std::literals::chrono_literals;
 
 struct Handler : public hs::Handler {
-  hs::Generator<hs::Response> Handle(const hs::Request &req) override {
+  coro::async_generator<hs::Response> Handle(const hs::Request req) override {
     int count = 0;
     co_yield hs::StatusCode::Ok;
     hs::Headers headers{
@@ -46,17 +47,12 @@ struct Route : public hs::Route {
 
 int main(int argc, char *argv[]) {
   spdlog::set_level(spdlog::level::debug);
-  asio::io_context io_context(2);
-
-  asio::signal_set signals(io_context, SIGINT, SIGTERM);
-  signals.async_wait([&](auto, auto sig) {
-    spdlog::info("shutting down server. sig: {}", sig);
-    io_context.stop();
-  });
+  asio::io_context io_context;
   auto server = std::make_shared<hs::HttpServer>(
       hs::Config("multipart", "localhost", 5555));
   server->AddRoute(std::make_shared<Route>());
-  co_spawn(io_context, server->ServeAsync(), asio::detached);
+  std::jthread t([&]() { coro::sync_wait(server->ServeAsync(io_context)); });
+  // signals.async_wait([&](auto, auto) { io_context.stop(); });
   io_context.run();
   return 0;
 }

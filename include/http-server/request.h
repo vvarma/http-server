@@ -1,6 +1,7 @@
 #ifndef HTTP_SERVER_REQUEST_H
 #define HTTP_SERVER_REQUEST_H
 
+#include <coro/task.hpp>
 #include <memory>
 #include <optional>
 
@@ -21,6 +22,8 @@ class Request {
   std::string_view Path() const;
   std::optional<std::string_view> Header(std::string_view key) const;
   std::optional<std::string_view> Param(std::string_view key) const;
+  std::optional<size_t> ContentLength() const;
+  coro::task<std::string> Body() const;
 
  private:
   std::shared_ptr<internal::RequestImpl> pimpl_;
