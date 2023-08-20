@@ -1,7 +1,6 @@
 #ifndef HTTP_SERVER_ROUTE_H
 #define HTTP_SERVER_ROUTE_H
-#include <asio/awaitable.hpp>
-#include <asio/use_awaitable.hpp>
+#include <coro/async_generator.hpp>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -12,57 +11,6 @@
 #include "http-server/enum.h"
 #include "http-server/request.h"
 namespace hs {
-template <typename T>
-class Generator {
- public:
-  struct promise_type;
-  using handle_type = std::coroutine_handle<promise_type>;
-  struct promise_type {
-    T value_;
-    std::exception_ptr exception_;
-
-    Generator get_return_object() {
-      return Generator(handle_type::from_promise(*this));
-    }
-    std::suspend_always initial_suspend() { return {}; }
-    std::suspend_always final_suspend() noexcept { return {}; }
-    void unhandled_exception() { exception_ = std::current_exception(); }
-
-    template <std::convertible_to<T> From>
-    std::suspend_always yield_value(From &&from) {
-      value_ = std::forward<From>(from);
-      return {};
-    }
-    void return_void() {}
-  };
-
-  handle_type h_;
-
-  Generator(handle_type h) : h_(h) {}
-  ~Generator() { h_.destroy(); }
-  explicit operator bool() {
-    fill();
-    return !h_.done();
-  }
-  T operator()() {
-    fill();
-    full_ = false;
-    return std::move(h_.promise().value_);
-  }
-
- private:
-  bool full_ = false;
-
-  void fill() {
-    if (!full_) {
-      h_();
-      if (h_.promise().exception_)
-        std::rethrow_exception(h_.promise().exception_);
-
-      full_ = true;
-    }
-  }
-};
 template <typename T>
 concept Writable = requires(T t) {
   { t.data() } -> std::convertible_to<const void *>;
@@ -91,7 +39,7 @@ class WritableResponseBody : public ResponseBody {
 struct Handler {
   typedef std::shared_ptr<Handler> Ptr;
 
-  virtual Generator<Response> Handle(const Request &req) = 0;
+  virtual coro::async_generator<Response> Handle(const Request req) = 0;
   virtual ~Handler();
   void SetDone();
   bool IsDone();

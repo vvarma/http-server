@@ -4,6 +4,8 @@
 
 #include <fmt/core.h>
 
+#include <asio/io_context.hpp>
+#include <coro/task.hpp>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -20,12 +22,12 @@ namespace internal {
 class HttpServerImpl;
 }  // namespace internal
 
-
 struct Config {
   std::string program_name;
   std::string bind_address;
   uint16_t port;
-  Config(const std::string &program_name, const std::string &bind_address, uint16_t port);
+  Config(const std::string &program_name, const std::string &bind_address,
+         uint16_t port);
 };
 
 class HttpServer : public std::enable_shared_from_this<HttpServer> {
@@ -34,8 +36,7 @@ class HttpServer : public std::enable_shared_from_this<HttpServer> {
 
   HttpServer(const Config &config);
   void AddRoute(const Route::Ptr &route);
-  void Serve();
-  asio::awaitable<void> ServeAsync();
+  coro::task<void> ServeAsync(asio::io_context &io_context);
   ~HttpServer();
 
  private:

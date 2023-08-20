@@ -1,6 +1,7 @@
 [requires]
 asio/1.28.1
 spdlog/1.11.0
+doctest/2.4.11
 
 [generators]
 CMakeDeps
