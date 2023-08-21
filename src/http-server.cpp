@@ -4,17 +4,12 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
-#include <asio.hpp>
-#include <asio/awaitable.hpp>
 #include <asio/buffer.hpp>
-#include <asio/co_spawn.hpp>
-#include <asio/detached.hpp>
 #include <asio/error.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/address_v4.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read_until.hpp>
-#include <asio/use_awaitable.hpp>
 #include <coro/single_consumer_event.hpp>
 #include <coro/task.hpp>
 #include <coro/when_all.hpp>
@@ -31,17 +26,7 @@
 #include "http-server/route.h"
 #include "request-impl.h"
 
-using asio::awaitable;
-using asio::co_spawn;
-using asio::detached;
 using asio::ip::tcp;
-
-#if defined(ASIO_ENABLE_HANDLER_TRACKING)
-#define use_awaitable \
-  asio::use_awaitable_t(__FILE__, __LINE__, __PRETTY_FUNCTION__)
-#else
-using asio::use_awaitable;
-#endif
 
 namespace hs {
 namespace internal {
@@ -140,13 +125,8 @@ class HttpServerImpl {
   coro::task<> HandleConnection(std::shared_ptr<tcp::socket> socket) {
     for (;;) {
       auto req = co_await ParseRequestLine(socket);
-      // if (req->version == Version::HTTP_1_1) {
-      //   std::string line = "HTTP/1.1 100 Continue\r\n";
-      //   co_await socket->async_write_some(asio::buffer(line), use_awaitable);
-      // }
       auto version = req->version;
       co_await HandleRequest(std::move(req));
-      break;
       if (version == Version::HTTP_1_0) {
         break;
       }
