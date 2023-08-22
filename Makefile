@@ -25,6 +25,11 @@ build: conan
 	cmake -S . -B $(BUILD_DIR) -G Ninja $(CMAKE_FLAGS) 
 	cmake --build $(BUILD_DIR) 
 
+.PHONY: test
+test: CMAKE_FLAGS += -DENABLE_TESTS=ON
+test: build
+	ctest --test-dir $(BUILD_DIR) -V
+
 .PHONY: check CPPCHECK-exists CLANG_TIDY-exists
 check: CMAKE_FLAGS += -DCMAKE_CXX_CPPCHECK=cppcheck -DCMAKE_CXX_CLANG_TIDY=clang-tidy 
 check: build

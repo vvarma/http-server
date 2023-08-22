@@ -3,6 +3,7 @@
 #include <asio/ip/tcp.hpp>
 #include <coro/task.hpp>
 #include <memory>
+#include <string>
 #include <unordered_map>
 
 #include "http-server/enum.h"
@@ -14,7 +15,8 @@ struct RequestImpl {
   Version version;
   std::string path;
   std::unordered_map<std::string, std::string> headers;
-  std::unordered_map<std::string, std::string> params;
+  std::unordered_map<std::string, std::string> query_params;
+  std::vector<std::string> path_params;
   std::shared_ptr<tcp::socket> socket;
   std::string body_part;
 };

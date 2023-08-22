@@ -19,33 +19,20 @@
 #include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "http-server/enum.h"
+#include "http-server/internal/request-impl.h"
+#include "http-server/internal/route.h"
 #include "http-server/route.h"
-#include "request-impl.h"
 
 using asio::ip::tcp;
 
 namespace hs {
 namespace internal {
-class Router {
- public:
-  void AddRoute(const Route::Ptr &route) { routes_.push_back(route); }
-  std::optional<Route::Ptr> Match(const RequestImpl::Ptr &request) {
-    for (auto route : routes_) {
-      if (route->GetMethod() == request->method &&
-          route->GetPath() == request->path) {
-        return route;
-      }
-    }
-    return std::nullopt;
-  }
-
- private:
-  std::vector<Route::Ptr> routes_;
-};
 
 class Session : public std::enable_shared_from_this<Session> {
  public:
@@ -113,10 +100,12 @@ class HttpServerImpl {
  public:
   HttpServerImpl(const Config &config) : config_(config) {}
   coro::task<> HandleRequest(RequestImpl::Ptr request) {
-    auto route = router_.Match(request);
+    auto route_match = router_.Match(request);
 
-    if (route) {
-      co_await std::make_shared<Session>(route.value()->GetHandler(), request)
+    if (route_match) {
+      auto [route, params] = route_match.value();
+      request->path_params = std::move(params);
+      co_await std::make_shared<Session>(route->GetHandler(), request)
           ->ProcessRequest();
     } else {
       co_await WriteOnFail(request, StatusCode::NotFound);

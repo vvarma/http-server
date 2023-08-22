@@ -14,7 +14,7 @@
 #include "coro/single_consumer_event.hpp"
 #include "http-server/enum.h"
 #include "http-server/http-server.h"
-#include "request-impl.h"
+#include "http-server/internal/request-impl.h"
 
 // Helper function to remove trailing '\r' and leading/trailing whitespace from
 // a string
@@ -81,7 +81,7 @@ coro::task<RequestImpl::Ptr> ParseRequestLine(
   }
 
   const auto [path, params] = ParseUrl(url);
-  req->params = params;
+  req->query_params = params;
   req->path = path;
 
   if (versionStr == "HTTP/1.0") {
@@ -129,8 +129,8 @@ std::optional<std::string_view> Request::Header(std::string_view name) const {
 }
 
 std::optional<std::string_view> Request::Param(std::string_view name) const {
-  auto it = pimpl_->params.find(std::string(name));
-  if (it != pimpl_->params.end()) {
+  auto it = pimpl_->query_params.find(std::string(name));
+  if (it != pimpl_->query_params.end()) {
     return it->second;
   }
   return std::nullopt;

@@ -1,5 +1,6 @@
 find_package(asio REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(doctest REQUIRED)
 
 include(FetchContent)
 

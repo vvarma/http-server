@@ -56,4 +56,11 @@ struct Route {
   virtual ~Route();
 };
 }  // namespace hs
+#define ROUTE(name, method, path, handler)                             \
+  class name : public hs::Route {                                      \
+   public:                                                             \
+    hs::Method GetMethod() const override { return method; }           \
+    std::string GetPath() const override { return path; }              \
+    hs::Handler::Ptr GetHandler() const override { return handler(); } \
+  }
 #endif  // !#ifndef HTTP_SERVER_ROUTE_H
