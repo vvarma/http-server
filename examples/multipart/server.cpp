@@ -52,6 +52,7 @@ int main(int argc, char *argv[]) {
       hs::Config("multipart", "localhost", 5555));
   server->AddRoute(std::make_shared<Route>());
   std::jthread t([&]() { coro::sync_wait(server->ServeAsync(io_context)); });
+  std::this_thread::sleep_for(1s);
   // signals.async_wait([&](auto, auto) { io_context.stop(); });
   io_context.run();
   return 0;

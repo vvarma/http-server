@@ -128,12 +128,16 @@ std::optional<std::string_view> Request::Header(std::string_view name) const {
   return std::nullopt;
 }
 
-std::optional<std::string_view> Request::Param(std::string_view name) const {
+std::optional<std::string_view> Request::QueryParam(
+    std::string_view name) const {
   auto it = pimpl_->query_params.find(std::string(name));
   if (it != pimpl_->query_params.end()) {
     return it->second;
   }
   return std::nullopt;
+}
+std::vector<std::string> &Request::Params() const {
+  return pimpl_->path_params;
 }
 
 std::optional<size_t> Request::ContentLength() const {

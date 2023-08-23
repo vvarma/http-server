@@ -1,3 +1,4 @@
+// Copyright 2023 Vinay Varma; Subject to the MIT License.
 #ifndef HTTP_SERVER_ENUM_H
 #define HTTP_SERVER_ENUM_H
 #include <fmt/core.h>
