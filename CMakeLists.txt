@@ -6,7 +6,7 @@ if (NOT DEFINED CMAKE_BUILD_TYPE)
 endif()
 include(cmake/dependencies.cmake)
 
-add_library(${PROJECT_NAME} STATIC src/http-server.cpp src/request.cpp src/route.cpp)
+add_library(${PROJECT_NAME} STATIC src/http-server.cpp src/request.cpp src/route.cpp src/static-routes.cpp)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(${PROJECT_NAME} PUBLIC fmt::fmt coro asio::asio PRIVATE spdlog::spdlog)
 

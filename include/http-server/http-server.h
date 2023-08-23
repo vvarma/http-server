@@ -14,6 +14,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "http-server/enum.h"
 #include "http-server/route.h"
 
 namespace hs {
@@ -48,6 +49,7 @@ class Exception : public std::exception {
   std::string message_;
 
  public:
+  StatusCode Code() const;
   Exception(StatusCode code, std::string message);
   const char *what() const noexcept override;
 };

@@ -100,16 +100,26 @@ class HttpServerImpl {
  public:
   HttpServerImpl(const Config &config) : config_(config) {}
   coro::task<> HandleRequest(RequestImpl::Ptr request) {
-    auto route_match = router_.Match(request);
+    StatusCode statusCode = StatusCode::Ok;
+    try {
+      auto route_match = router_.Match(request);
 
-    if (route_match) {
-      auto [route, params] = route_match.value();
-      request->path_params = std::move(params);
-      co_await std::make_shared<Session>(route->GetHandler(), request)
-          ->ProcessRequest();
-    } else {
-      co_await WriteOnFail(request, StatusCode::NotFound);
+      if (route_match) {
+        auto [route, params] = route_match.value();
+        request->path_params = std::move(params);
+        co_await std::make_shared<Session>(route->GetHandler(), request)
+            ->ProcessRequest();
+      } else {
+        co_await WriteOnFail(request, StatusCode::NotFound);
+      }
+    } catch (const Exception &e) {
+      spdlog::error("Handling exception {}", e.what());
+      statusCode = e.Code();
+    } catch (const std::exception &e) {
+      spdlog::error("Handling std exception {}", e.what());
+      statusCode = StatusCode::InternalServerError;
     }
+    co_await WriteOnFail(request, statusCode);
   }
   coro::task<> HandleConnection(std::shared_ptr<tcp::socket> socket) {
     for (;;) {
@@ -180,5 +190,6 @@ Exception::Exception(StatusCode statusCode, std::string message)
     : code_(statusCode), message_(message) {}
 
 const char *Exception::what() const noexcept { return message_.c_str(); }
+StatusCode Exception::Code() const { return code_; }
 
 }  // namespace hs
