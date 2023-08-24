@@ -37,7 +37,11 @@ namespace internal {
 class Session : public std::enable_shared_from_this<Session> {
  public:
   Session(Handler::Ptr handler, RequestImpl::Ptr request)
-      : handler_(handler), request_(request) {}
+      : handler_(handler), request_(request) {
+    if (request->headers.contains("Connection")) {
+      keep_alive = request->headers["Connection"] != "close";
+    }
+  }
 
   coro::task<> WriteSome(asio::const_buffer buffer) {
     asio::error_code ec;
@@ -57,6 +61,15 @@ class Session : public std::enable_shared_from_this<Session> {
         "{} {:d} {:s}\r\n", request_->version, statusCode, statusCode)));
   }
   coro::task<> operator()(Headers headers) {
+    if (keep_alive) {
+      if (headers.contains("Connection")) {
+        keep_alive = headers["Connection"] != "Close";
+      } else {
+        headers["Connection"] = "Keep-Alive";
+      }
+    } else {
+      headers["Connection"] = "Close";
+    }
     std::stringstream ss;
     for (auto &header : headers) {
       auto headerLine = fmt::format("{}: {}\r\n", header.first, header.second);
@@ -70,17 +83,19 @@ class Session : public std::enable_shared_from_this<Session> {
     co_await WriteSome(asio::buffer(resp->GetData(), resp->GetSize()));
   }
 
-  coro::task<> ProcessRequest() {
+  coro::task<bool> ProcessRequest() {
     auto gen = handler_->Handle(Request(request_));
     for (auto iter = co_await gen.begin(); iter != gen.end(); co_await ++iter) {
       co_await std::visit(*this, *iter);
     }
     spdlog::info("Finished processing request");
+    co_return keep_alive;
   }
 
  private:
   Handler::Ptr handler_;
   RequestImpl::Ptr request_;
+  bool keep_alive = true;
 };
 
 coro::task<> WriteOnFail(RequestImpl::Ptr req, StatusCode statusCode) {
@@ -99,16 +114,18 @@ coro::task<> WriteOnFail(RequestImpl::Ptr req, StatusCode statusCode) {
 class HttpServerImpl {
  public:
   HttpServerImpl(const Config &config) : config_(config) {}
-  coro::task<> HandleRequest(RequestImpl::Ptr request) {
+  coro::task<bool> HandleRequest(RequestImpl::Ptr request) {
     StatusCode statusCode = StatusCode::Ok;
+    bool keep_alive = true;
     try {
       auto route_match = router_.Match(request);
 
       if (route_match) {
         auto [route, params] = route_match.value();
         request->path_params = std::move(params);
-        co_await std::make_shared<Session>(route->GetHandler(), request)
-            ->ProcessRequest();
+        keep_alive =
+            co_await std::make_shared<Session>(route->GetHandler(), request)
+                ->ProcessRequest();
       } else {
         co_await WriteOnFail(request, StatusCode::NotFound);
       }
@@ -120,16 +137,17 @@ class HttpServerImpl {
       statusCode = StatusCode::InternalServerError;
     }
     co_await WriteOnFail(request, statusCode);
+    co_return keep_alive;
   }
   coro::task<> HandleConnection(std::shared_ptr<tcp::socket> socket) {
     for (;;) {
       auto req = co_await ParseRequestLine(socket);
-      auto version = req->version;
-      co_await HandleRequest(std::move(req));
-      if (version == Version::HTTP_1_0) {
+      if (!req) break;
+      auto version = req.value()->version;
+      auto keep_alive = co_await HandleRequest(std::move(req.value()));
+      if (version == Version::HTTP_1_0 || !keep_alive) {
         break;
       }
-      // todo figure when to break
     }
   }
 

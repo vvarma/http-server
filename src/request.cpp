@@ -4,9 +4,11 @@
 
 #include <asio/buffer.hpp>
 #include <asio/completion_condition.hpp>
+#include <asio/error_code.hpp>
 #include <asio/read.hpp>
 #include <asio/read_until.hpp>
 #include <asio/streambuf.hpp>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -51,13 +53,23 @@ auto ParseUrl(const std::string &url) {
   return std::make_pair(path, params);
 }
 
-coro::task<RequestImpl::Ptr> ParseRequestLine(
+coro::task<std::optional<RequestImpl::Ptr>> ParseRequestLine(
     std::shared_ptr<tcp::socket> socket) {
+  bool has_request = true;
   asio::streambuf buffer;
   coro::single_consumer_event event;
   async_read_until(*socket, buffer, "\r\n",
-                   [&](auto ec, auto n) { event.set(); });
+                   [&](asio::error_code ec, size_t size) {
+                     if (size == 0) {
+                       has_request = false;
+                       spdlog::debug("received ec {}", ec.message());
+                     }
+                     event.set();
+                   });
   co_await event;
+  if (!has_request) {
+    co_return std::nullopt;
+  }
   std::istream input(&buffer);
 
   auto req = std::make_shared<RequestImpl>();

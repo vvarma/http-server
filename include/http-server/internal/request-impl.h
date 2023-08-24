@@ -21,7 +21,7 @@ struct RequestImpl {
   std::shared_ptr<tcp::socket> socket;
   std::string body_part;
 };
-coro::task<RequestImpl::Ptr> ParseRequestLine(
+coro::task<std::optional<RequestImpl::Ptr>> ParseRequestLine(
     std::shared_ptr<tcp::socket> socket);
 }  // namespace hs::internal
 
