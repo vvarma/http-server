@@ -58,7 +58,7 @@ coro::task<std::optional<RequestImpl::Ptr>> ParseRequestLine(
   bool has_request = true;
   asio::streambuf buffer;
   coro::single_consumer_event event;
-  async_read_until(*socket, buffer, "\r\n",
+  async_read_until(*socket, buffer, "\r\n\r\n",
                    [&](asio::error_code ec, size_t size) {
                      if (size == 0) {
                        has_request = false;
@@ -168,15 +168,15 @@ coro::task<std::string> Request::Body() const {
   if (pimpl_->body_part.size() >= cl.value()) {
     co_return pimpl_->body_part.substr(0, cl.value());
   }
-  std::string ret;
-  ret.reserve(cl.value() - pimpl_->body_part.size());
+  size_t remaining = cl.value() - pimpl_->body_part.size();
   coro::single_consumer_event event;
-  asio::async_read(*pimpl_->socket,
-                   asio::mutable_buffer(ret.data(), ret.size()),
-                   asio::transfer_exactly(cl.value()),
+  asio::streambuf buffer;
+  asio::async_read(*pimpl_->socket, buffer, asio::transfer_exactly(remaining),
                    [&](auto ec, auto n) { event.set(); });
   co_await event;
-
-  co_return pimpl_->body_part + ret;
+  std::istream input(&buffer);
+  co_return pimpl_->body_part +
+      std::string(std::istreambuf_iterator<char>(input), {});
+  ;
 }
 }  // namespace hs

@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <optional>
 
 #include "http-server/enum.h"
 using asio::ip::tcp;
