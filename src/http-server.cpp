@@ -129,6 +129,7 @@ class HttpServerImpl {
       } else {
         co_await WriteOnFail(request, StatusCode::NotFound);
       }
+      co_return keep_alive;
     } catch (const Exception &e) {
       spdlog::error("Handling exception {}", e.what());
       statusCode = e.Code();
