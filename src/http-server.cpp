@@ -10,19 +10,18 @@
 #include <asio/ip/address_v4.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read_until.hpp>
+#include <asio/write.hpp>
+#include <atomic>
 #include <coro/single_consumer_event.hpp>
 #include <coro/task.hpp>
 #include <coro/when_all.hpp>
-#include <cstddef>
 #include <exception>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
-#include <string_view>
 #include <thread>
 #include <unordered_map>
-#include <unordered_set>
 
 #include "http-server/enum.h"
 #include "http-server/internal/request-impl.h"
@@ -46,8 +45,9 @@ class Session : public std::enable_shared_from_this<Session> {
   coro::task<> WriteSome(asio::const_buffer buffer) {
     asio::error_code ec;
     coro::single_consumer_event event;
-    request_->socket->async_write_some(buffer, [&](auto ec, auto n) {
-      spdlog::trace("Wrote {} bytes to socket; ec:{}", n, ec.message());
+    asio::async_write(*request_->socket, buffer, [&](auto ec, auto n) {
+      spdlog::trace("Wrote {} bytes of {} to socket; ec:{}", n, buffer.size(),
+                    ec.message());
       if (ec == asio::error::broken_pipe) {
         spdlog::trace("Got a broken pipe on write");
         handler_->SetDone();
